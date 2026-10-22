@@ -144,7 +144,15 @@
       width: state.video.videoWidth,
       height: state.video.videoHeight,
       label: trackLabel(),
+      deviceId: trackDeviceId(),
     };
+  }
+
+  function trackDeviceId() {
+    try {
+      const s = state.stream.getVideoTracks()[0].getSettings();
+      return (s && s.deviceId) || '';
+    } catch (e) { return ''; }
   }
 
   function trackLabel() {

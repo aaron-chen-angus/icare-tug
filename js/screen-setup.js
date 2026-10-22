@@ -143,18 +143,29 @@
     permBtn.disabled = true; permBtn.textContent = 'Starting camera…';
     try {
       await PE.init(S.form.pose_model);
-      const info = await PE.startCamera({ facing: S.form.camera_facing });
+      // First start (triggers permission prompt and reveals device labels).
+      let info = await PE.startCamera({ facing: S.form.camera_facing });
+      // Now that labels are available, pick the PRIMARY REAR (wide, 1x) camera —
+      // never the front or the ultrawide 0.5x — and restart on it if needed.
+      const cams = await PE.listCameras();
+      const best = pickBestRearCamera(cams, S.form.camera_facing);
+      if (best && best.deviceId && best.deviceId !== (info.deviceId || '')) {
+        try { info = await PE.startCamera({ deviceId: best.deviceId, facing: S.form.camera_facing }); } catch (e) {}
+      }
       S.device = {
         video_width_px: info.width, video_height_px: info.height, lens_label: info.label,
         pose_delegate: PE.delegate(), orientation: (screen.orientation && screen.orientation.type) || '',
         user_agent: navigator.userAgent,
       };
       await PE.requestWakeLock();
-      // populate lens list
-      const cams = await PE.listCameras();
+      // populate lens list and pre-select the chosen camera
       const sel = R.$('#lensSel');
       sel.innerHTML = '';
-      cams.forEach((c, i) => sel.appendChild(el('option', { value: c.deviceId }, [c.label || ('Camera ' + (i + 1))])));
+      cams.forEach((c, i) => {
+        const o = el('option', { value: c.deviceId }, [c.label || ('Camera ' + (i + 1))]);
+        if (best && c.deviceId === best.deviceId) o.selected = true;
+        sel.appendChild(o);
+      });
       // Switch to FULL-SCREEN camera mode: hide the intro panel and let the
       // camera cover the screen with the HUD strip + bottom bar on top.
       const introEl = R.$('#setupIntro'); if (introEl) introEl.classList.add('hidden');
@@ -168,6 +179,30 @@
       R.$('#camErr').textContent = 'Camera error: ' + (e && e.message ? e.message : e) +
         '. Camera needs HTTPS (GitHub Pages) or localhost.';
     }
+  }
+
+  // Choose the primary rear 1x camera. iOS labels look like "Back Camera",
+  // "Back Dual Wide Camera", "Back Ultra Wide Camera", "Back Telephoto Camera",
+  // "Front Camera". We want the plain wide 1x rear lens.
+  function pickBestRearCamera(cams, facing) {
+    if (!cams || !cams.length) return null;
+    const wantFront = (facing === 'user');
+    let best = null, bestScore = -1e9;
+    cams.forEach((c) => {
+      const label = (c.label || '').toLowerCase();
+      let score = 0;
+      const isFront = /front|user|face/.test(label);
+      const isBack = /back|rear|environment|world/.test(label);
+      if (wantFront) { score += isFront ? 100 : 0; score += isBack ? -100 : 0; }
+      else { score += isBack ? 100 : 0; score += isFront ? -100 : 0; }
+      if (/ultra|0\.5|wide angle|wide-angle/.test(label)) score -= 60; // avoid ultrawide
+      if (/tele/.test(label)) score -= 40;                            // avoid telephoto
+      if (/triple|dual/.test(label)) score -= 10;                     // combos can default odd
+      if (/\bback camera\b|\bfront camera\b/.test(label)) score += 20; // the plain 1x lens
+      if (!label) score -= 5; // unlabeled: mild penalty, keep as fallback
+      if (score > bestScore) { bestScore = score; best = c; }
+    });
+    return best;
   }
 
   async function onLensChange() {
@@ -191,15 +226,24 @@
     // 1. camera fps
     ls.pass.camera = pkt.fps >= CFG.qc.minFps;
 
-    // 2. whole body in frame: key markers visible >=0.5
+    // 2. Body in frame — realistic for a SIDE-ON SEATED start. MediaPipe lowers
+    //    confidence on the far-side limb and on partly-occluded feet, so we do
+    //    NOT demand every landmark at high confidence. We require:
+    //      - the CORE (both shoulders + both hips) tracked, AND
+    //      - at least ONE knee tracked, AND at least ONE foot point (ankle/heel/
+    //        toe on either side) tracked,
+    //    with each used point inside the frame. Held for ~0.5 s.
     let bodyOk = false;
     if (img) {
-      const needed = [IDX.nose, IDX.l_sh, IDX.r_sh, IDX.l_hip, IDX.r_hip, IDX.l_kn, IDX.r_kn, IDX.l_an, IDX.r_an, IDX.l_heel, IDX.r_heel, IDX.l_toe, IDX.r_toe];
-      bodyOk = needed.every((i) => img[i] && img[i].visibility >= 0.5 && img[i].y >= 0.02 && img[i].y <= 0.99);
+      const vis = (i) => img[i] && img[i].visibility >= 0.4 && img[i].y >= 0 && img[i].y <= 1;
+      const core = vis(IDX.l_sh) && vis(IDX.r_sh) && vis(IDX.l_hip) && vis(IDX.r_hip);
+      const aKnee = vis(IDX.l_kn) || vis(IDX.r_kn);
+      const aFoot = vis(IDX.l_an) || vis(IDX.r_an) || vis(IDX.l_heel) || vis(IDX.r_heel) || vis(IDX.l_toe) || vis(IDX.r_toe);
+      bodyOk = core && aKnee && aFoot;
     }
     if (bodyOk) { if (ls.bodyOkSince == null) ls.bodyOkSince = pkt.tMs; }
     else ls.bodyOkSince = null;
-    ls.pass.body = bodyOk && (pkt.tMs - (ls.bodyOkSince || pkt.tMs) >= 1000);
+    ls.pass.body = bodyOk && (pkt.tMs - (ls.bodyOkSince || pkt.tMs) >= 500);
 
     // 3. seated & still (hip world vertical stable + knees flexed)
     if (world) {
