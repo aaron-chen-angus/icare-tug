@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TUG//LAB — Test Runner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    body { padding: 16px; }
+    .t-pass { color: var(--green); }
+    .t-fail { color: var(--red); }
+    .t-summary { font-family: var(--font-head); font-size: 20px; margin: 12px 0; }
+    td.msg { white-space: normal; color: var(--text-dim); font-size: 12px; }
+    .grp { font-family: var(--font-head); color: var(--orange); margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div id="app" style="max-width:900px">
+    <h1 class="logo">TUG<span class="sep">//</span>LAB — TESTS</h1>
+    <div class="t-summary" id="summary">Running…</div>
+    <div class="tablewrap">
+      <table id="results">
+        <thead><tr><th>#</th><th>Group</th><th>Test</th><th>Result</th><th class="msg">Message</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Load app modules under test (order matters) -->
+  <script src="../js/config.js"></script>
+  <script src="../js/strings.js"></script>
+  <script src="../js/schema.js"></script>
+  <script src="../js/util.js"></script>
+  <script src="../js/dsp.js"></script>
+  <script src="../js/analysis.js"></script>
+  <script src="../js/export.js"></script>
+  <script src="synth.js"></script>
+  <!-- Tiny harness -->
+  <script>
+    (function () {
+      const results = [];
+      let curGroup = '';
+      const T = {
+        group(name) { curGroup = name; },
+        test(name, fn) {
+          try { fn(); results.push({ group: curGroup, name, pass: true, msg: '' }); }
+          catch (e) { results.push({ group: curGroup, name, pass: false, msg: (e && e.message) || String(e) }); }
+        },
+        assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); },
+        close(a, b, tol, msg) {
+          if (a == null || !isFinite(a)) throw new Error((msg || '') + ` got ${a}`);
+          if (Math.abs(a - b) > tol) throw new Error((msg || '') + ` expected ${b}±${tol}, got ${a.toFixed(4)}`);
+        },
+        eq(a, b, msg) { if (a !== b) throw new Error((msg || '') + ` expected ${b}, got ${a}`); },
+      };
+      window.TestKit = T;
+      window.__afterTests = function () {
+        const tbody = document.querySelector('#results tbody');
+        let pass = 0; let lastGroup = '';
+        results.forEach((r, i) => {
+          if (r.group !== lastGroup) {
+            lastGroup = r.group;
+          }
+          if (r.pass) pass++;
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${i + 1}</td><td>${r.group}</td><td>${r.name}</td>` +
+            `<td class="${r.pass ? 't-pass' : 't-fail'}">${r.pass ? 'PASS' : 'FAIL'}</td>` +
+            `<td class="msg">${r.msg || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+        const n = results.length;
+        const sum = document.getElementById('summary');
+        sum.textContent = `${pass}/${n} passed`;
+        sum.className = 't-summary ' + (pass === n ? 't-pass' : 't-fail');
+        // Console dump for headless runners (Chrome --dump-dom won't show JS,
+        // but --enable-logging + console works; we also set a title marker).
+        results.forEach((r) => { if (!r.pass) console.log('FAIL [' + r.group + '] ' + r.name + ' :: ' + r.msg); });
+        console.log('TUG_TEST_SUMMARY ' + pass + '/' + n);
+        document.title = 'TESTS ' + pass + '/' + n;
+        window.__TEST_DONE = { pass: pass, total: n };
+      };
+    })();
+  </script>
+  <script src="analysis.test.js"></script>
+  <script>window.__afterTests();</script>
+</body>
+</html>
