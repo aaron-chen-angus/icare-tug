@@ -46,17 +46,19 @@
     const root = $('#screen-root');
     if (!Screens[name]) { console.warn('No screen', name); return; }
     current = name;
-    // Live camera layer is shown for S2 (setup), S3 (live) and replay.
-    // During setup it sits BEHIND the interactive content (so the permission
-    // button / pre-flight checklist stay tappable); during the actual test it
-    // covers full-screen on top.
+    // Camera layer usage:
+    //  - setup (S2): show the intro panels first (camera hidden). screen-setup
+    //    adds body.camera-full once the camera actually starts, which hides the
+    //    panels and lets the camera fill the screen with the HUD + controls.
+    //  - live / replay (S3): camera fills the screen immediately.
     const liveLayer = $('#liveSession');
     const isLive = (name === 'setup' || name === 'live' || name === 'replay');
     const isSetup = (name === 'setup');
+    const camFull = (name === 'live' || name === 'replay');
     document.body.classList.toggle('live-active', isLive);
     document.body.classList.toggle('setup-active', isSetup);
+    document.body.classList.toggle('camera-full', camFull);
     liveLayer.classList.toggle('active', isLive);
-    liveLayer.classList.toggle('behind', isSetup);
     liveLayer.setAttribute('aria-hidden', String(!isLive));
 
     // guard back button mid-test

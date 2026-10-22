@@ -287,16 +287,35 @@ input:focus, select:focus, textarea:focus {
 /* ---- live session / camera -------------------------------------------- */
 .live-session { position: fixed; inset: 0; z-index: 20; background: #000; display: none; }
 .live-session.active { display: block; }
-/* During S2 setup the camera previews BEHIND the interactive setup content so
-   the permission button and pre-flight checklist remain tappable. */
-.live-session.behind { z-index: 0; background: transparent; }
-.live-session.behind .hud,
-.live-session.behind .overlay-status,
-.live-session.behind .progress,
-.live-session.behind .controls { display: none; }
-/* Keep #app scrollable and on top during setup; give panels a readable scrim. */
-body.setup-active #app { position: relative; z-index: 2; min-height: 100dvh; }
-body.setup-active .panel { background: rgba(5, 10, 22, .82); }
+
+/* SETUP phase A (intro): the camera is NOT yet started, so the live layer is
+   hidden and the normal #app panels (diagram + permission button) are shown. */
+body.setup-active:not(.camera-full) .live-session { display: none; }
+
+/* CAMERA-FULL (live preview during setup, and the whole of S3): the camera
+   fills the screen; the #app panels are hidden so NOTHING covers the subject.
+   The HUD strip (top) and controls (bottom) float over the camera. */
+body.camera-full #app { display: none; }
+body.camera-full .live-session { display: block; z-index: 20; }
+
+/* Pre-flight HUD strip (compact chips across the top, over the camera). */
+.pf-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-chip {
+  font-family: var(--font-head); font-size: 10px; letter-spacing: .04em;
+  padding: 3px 7px; border: 1px solid var(--line); clip-path: var(--clip);
+  background: rgba(5, 10, 22, .72); color: var(--text-dim);
+}
+.pf-chip.ok { border-color: var(--green); color: var(--green); }
+.pf-chip.bad { border-color: var(--red); color: var(--red); }
+.pf-chip.warn { border-color: var(--amber); color: var(--amber); }
+.pf-lensrow { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.pf-lensrow select { min-height: 38px; background: rgba(5,10,22,.8); font-size: 13px; }
+.pf-wide { min-height: 38px; padding: 6px 12px; flex: 0 0 auto; }
+.pf-hint {
+  margin-top: 6px; font-size: 12px; color: var(--text);
+  background: rgba(5, 10, 22, .6); padding: 4px 8px; clip-path: var(--clip);
+  display: inline-block;
+}
 .live-video-wrap {
   position: absolute; inset: 0;
   display: grid; place-items: center;

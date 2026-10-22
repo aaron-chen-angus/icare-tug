@@ -78,52 +78,45 @@
     const wrap = el('div');
     wrap.appendChild(R.header());
 
+    // ===== Phase A: pre-camera intro (panels OK, no camera yet) ==========
+    const intro = el('div', { id: 'setupIntro' });
     const panel = el('div', { class: 'panel' });
     panel.appendChild(el('div', { class: 'brackets' }));
     panel.appendChild(el('h2', {}, [T('setup.title')]));
     panel.appendChild(setupDiagram());
     panel.appendChild(el('p', { style: 'font-size:14px;color:var(--text-dim)' }, [T('setup.follow')]));
-
-    // permission / start-camera button
     const permBtn = el('button', { class: 'btn btn-primary btn-large', id: 'permBtn', onclick: onStartCamera }, [T('setup.permission')]);
     panel.appendChild(permBtn);
     const camErr = el('div', { class: 'err', id: 'camErr' });
     panel.appendChild(camErr);
+    panel.appendChild(el('button', { class: 'btn', style: 'margin-top:8px', onclick: onCancel }, ['← BACK']));
+    intro.appendChild(panel);
+    wrap.appendChild(intro);
 
-    // lens picker (populated after permission)
-    const lensWrap = el('div', { class: 'fg hidden', id: 'lensWrap' });
-    lensWrap.appendChild(el('label', {}, ['Camera / lens']));
-    const lensSel = el('select', { id: 'lensSel', onchange: onLensChange });
-    lensWrap.appendChild(lensSel);
-    lensWrap.appendChild(el('button', { class: 'btn', style: 'margin-top:8px', onclick: onWide }, ['TRY WIDE (0.5×) LENS']));
-    panel.appendChild(lensWrap);
-    wrap.appendChild(panel);
-
-    // pre-flight list
-    const pf = el('div', { class: 'panel hidden', id: 'pfPanel' });
-    pf.appendChild(el('h3', {}, ['Pre-flight checks']));
-    const list = el('ul', { class: 'preflight', id: 'pfList' });
+    // ===== Phase B: live camera overlay UI (built now, shown after start) ==
+    // Compact top HUD strip with check chips — lives in the fixed live layer so
+    // it sits OVER the full-screen camera. The camera is never covered by panels.
+    const hud = R.$('#liveHud');
+    hud.innerHTML = '';
+    const pfBar = el('div', { class: 'pf-bar', id: 'pfBar' });
     CHECKS.forEach((c) => {
-      const li = el('li', { id: 'pf_' + c.key }, []);
-      li.appendChild(el('span', { class: 'mark', id: 'mark_' + c.key }, ['◌']));
-      li.appendChild(el('span', {}, [c.label]));
-      if (c.blocking) li.appendChild(el('span', { class: 'block-tag' }, ['BLOCKING']));
-      list.appendChild(li);
+      const chip = el('span', { class: 'pf-chip', id: 'mark_' + c.key, title: c.label }, [chipLabel(c), ' ◌']);
+      pfBar.appendChild(chip);
     });
-    pf.appendChild(list);
-    pf.appendChild(el('p', { class: 'opt', id: 'pfHint' }, [T('setup.markHeight')]));
-    wrap.appendChild(pf);
+    hud.appendChild(pfBar);
+    const lensRow = el('div', { class: 'pf-lensrow', id: 'lensWrap' });
+    const lensSel = el('select', { id: 'lensSel', onchange: onLensChange, 'aria-label': 'Camera / lens' });
+    lensRow.appendChild(lensSel);
+    lensRow.appendChild(el('button', { class: 'btn pf-wide', onclick: onWide }, ['0.5×']));
+    hud.appendChild(lensRow);
+    const pfHint = el('div', { class: 'pf-hint', id: 'pfHint' }, [T('setup.markHeight')]);
+    hud.appendChild(pfHint);
 
-    // START / CANCEL live INSIDE the setup content (over the camera preview) so
-    // they stay tappable. The fixed live-layer controls are only used in S3.
-    const controls = el('div', { class: 'btn-row', style: 'margin-top:12px' });
-    const cancelBtn = el('button', { class: 'btn btn-danger', onclick: onCancel }, ['CANCEL']);
-    const startBtn = el('button', { class: 'btn btn-primary', id: 'startTestBtn', disabled: 'true', onclick: onStartTest }, [T('setup.start')]);
-    controls.appendChild(cancelBtn);
-    controls.appendChild(startBtn);
-    wrap.appendChild(controls);
-    // clear any stale live-layer controls from a previous screen
-    const liveCtrls = R.$('#liveControls'); if (liveCtrls) liveCtrls.innerHTML = '';
+    // Fixed bottom bar: CANCEL + big START (always visible over the camera).
+    const controls = R.$('#liveControls');
+    controls.innerHTML = '';
+    controls.appendChild(el('button', { class: 'btn btn-danger', onclick: onCancel }, ['CANCEL']));
+    controls.appendChild(el('button', { class: 'btn btn-primary', id: 'startTestBtn', disabled: 'true', onclick: onStartTest }, [T('setup.start')]));
 
     // reset per-screen state
     liveState = {
@@ -136,6 +129,11 @@
     CHECKS.forEach((c) => { liveState.pass[c.key] = false; });
 
     return wrap;
+  }
+
+  // short label for the HUD check chip
+  function chipLabel(c) {
+    return ({ camera: 'FPS', body: 'BODY', seated: 'SEAT', scale: 'SCALE', sideon: 'SIDE', light: 'LIGHT', pan: 'PAN' })[c.key] || c.key.toUpperCase();
   }
 
   async function onStartCamera() {
@@ -157,9 +155,11 @@
       const sel = R.$('#lensSel');
       sel.innerHTML = '';
       cams.forEach((c, i) => sel.appendChild(el('option', { value: c.deviceId }, [c.label || ('Camera ' + (i + 1))])));
-      R.$('#lensWrap').classList.remove('hidden');
-      R.$('#pfPanel').classList.remove('hidden');
-      permBtn.classList.add('hidden');
+      // Switch to FULL-SCREEN camera mode: hide the intro panel and let the
+      // camera cover the screen with the HUD strip + bottom bar on top.
+      const introEl = R.$('#setupIntro'); if (introEl) introEl.classList.add('hidden');
+      document.body.classList.add('camera-full');
+      PE.resizeCanvas();
       // start detection feeding the pre-flight evaluator
       PE.markT0(performance.now());
       PE.startDetection(onPreflightFrame);
@@ -252,11 +252,7 @@
   }
 
   function updateHud(pkt) {
-    const hud = R.$('#liveHud');
-    if (!hud) return;
-    hud.innerHTML = '';
-    const fps = el('span', { class: 'phase-chip' }, [Math.round(pkt.fps) + ' FPS']);
-    hud.appendChild(fps);
+    // Do NOT rebuild the HUD here (that would wipe the check chips every frame).
     if (CFG.debug.enabled) {
       const ov = R.$('#debugOverlay');
       if (ov) ov.textContent = `fps ${Math.round(pkt.fps)} · ${pkt.delegate} · oblq ${liveState.obliquity.toFixed(2)} · pan ${Math.round(liveState.panRate)}`;
@@ -266,15 +262,21 @@
   function renderChecks() {
     let allBlockingPass = true;
     CHECKS.forEach((c) => {
-      const mark = R.$('#mark_' + c.key);
-      if (!mark) return;
+      const chip = R.$('#mark_' + c.key);
+      if (!chip) return;
       const ok = liveState.pass[c.key];
-      mark.textContent = ok ? '✔' : (c.blocking ? '✖' : '◌');
-      mark.className = 'mark ' + (ok ? 'ok' : (c.blocking ? 'bad' : 'warn'));
+      const sym = ok ? '✓' : (c.blocking ? '✗' : '!');
+      chip.textContent = chipLabel(c) + ' ' + sym;
+      chip.className = 'pf-chip ' + (ok ? 'ok' : (c.blocking ? 'bad' : 'warn'));
       if (c.blocking && !ok) allBlockingPass = false;
     });
     const btn = R.$('#startTestBtn');
-    if (btn) btn.disabled = !allBlockingPass;
+    if (btn) {
+      btn.disabled = !allBlockingPass;
+      btn.classList.toggle('pulse', allBlockingPass);
+    }
+    const hint = R.$('#pfHint');
+    if (hint) hint.textContent = allBlockingPass ? 'Ready — tap START TEST.' : 'Keep the whole body in frame, side-on, seated to start.';
   }
 
   // --- geometry helpers (world landmarks) --------------------------------
@@ -315,6 +317,7 @@
       hip_up_seated_m: liveState.seatedHipUp,
       obliquity_median: liveState.obliquity,
     };
+    document.body.classList.remove('camera-full');
     R.go('live');
   }
   function pickDominant() {
@@ -325,7 +328,7 @@
     const rv = (w[IDX.r_sh].visibility || 0) + (w[IDX.r_hip].visibility || 0) + (w[IDX.r_kn].visibility || 0) + (w[IDX.r_an].visibility || 0);
     return lv >= rv ? 'left' : 'right';
   }
-  function onCancel() { PE.stop(); R.go('entry'); }
+  function onCancel() { document.body.classList.remove('camera-full'); PE.stop(); R.go('entry'); }
 
   R.register('setup', render);
 })(typeof window !== 'undefined' ? window : globalThis);
