@@ -121,8 +121,12 @@
     const video = {
       width: { ideal: CFG.camera.width },
       height: { ideal: CFG.camera.height },
+      aspectRatio: { ideal: CFG.camera.width / CFG.camera.height }, // prefer portrait (9:16)
       frameRate: { ideal: CFG.camera.fps, min: 24 },
     };
+    // Default to the PRIMARY rear camera (not the 0.5x ultrawide). facingMode
+    // 'environment' maps to the main lens on iOS/Android; the ultrawide is only
+    // used if the operator explicitly taps the 0.5x button.
     if (opts.deviceId) video.deviceId = { exact: opts.deviceId };
     else video.facingMode = { ideal: opts.facing || 'environment' };
 
@@ -164,12 +168,14 @@
   }
 
   /* ---- display mapping (shared by overlay + analysis) -------------------- */
-  // The <video> and <canvas> use object-fit: contain. Compute the letterboxed
-  // rectangle so normalised image coords map to the SAME displayed pixels.
+  // The <video> and <canvas> use object-fit: COVER (fills the screen; crops the
+  // overflow). Compute the covered rectangle (which extends beyond the canvas on
+  // one axis) so normalised image coords map to the SAME displayed pixels and
+  // the skeleton overlay stays aligned with the video.
   function fitRect() {
     const cw = state.canvas.width, ch = state.canvas.height;
     const vw = state.video.videoWidth || cw, vh = state.video.videoHeight || ch;
-    const scale = Math.min(cw / vw, ch / vh);
+    const scale = Math.max(cw / vw, ch / vh); // COVER = max (was min for contain)
     const dw = vw * scale, dh = vh * scale;
     return { x: (cw - dw) / 2, y: (ch - dh) / 2, w: dw, h: dh };
   }
