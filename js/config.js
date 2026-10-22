@@ -142,6 +142,7 @@
     sheets: {
       // Apps Script Web app /exec URL (deployed: execute as Me, access Anyone).
       webhookUrl: 'https://script.google.com/macros/s/AKfycby3DdObJuf1K2Zb1iWiXzw6_QrayqH9KgDnY-cbnewyiZvEiHkQ49dcoq4lqO5W4F9PHQ/exec',
+      autoUpload: true,            // upload to Google Sheets automatically on test completion
       uploadFrames: false,         // also upload the 30 Hz Frames table
     },
 

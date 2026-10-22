@@ -239,6 +239,9 @@
   function historyGet() { return U.lsGet('history', []); }
   function historyAdd(summary) {
     const list = historyGet();
+    // de-duplicate by session_id (auto-upload then a manual re-send is harmless)
+    const existingIdx = list.findIndex((x) => x.session_id === summary.session_id);
+    if (existingIdx >= 0) list.splice(existingIdx, 1);
     list.unshift({
       session_id: summary.session_id, participant_id: summary.participant_id,
       timestamp_utc: summary.timestamp_utc, total_time_taken_s: summary.total_time_taken_s,

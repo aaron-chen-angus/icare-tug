@@ -168,7 +168,7 @@
     return wrap;
   }
 
-  function runAnalysis(statusLine, opts) {
+  async function runAnalysis(statusLine, opts) {
     const S = R.Store;
     const steps = [T('analysing.filter'), T('analysing.phases'), T('analysing.gait')];
     let si = 0;
@@ -193,6 +193,23 @@
       ? Math.round((S.live_time_s - result.summary.total_time_taken_s) * 100) / 100 : null;
     result.summary.live_time_s = global.Util.round(S.live_time_s, 2);
     result.summary.live_vs_offline_diff_s = S.live_vs_offline_diff_s;
+    result.rawFrames = S.frames;
+
+    // AUTO-UPLOAD on completion: save to local history and push to Google Sheets
+    // immediately, without waiting for the operator to tap Submit. The receiver
+    // de-duplicates by session_id, so a later manual submit is harmless.
+    if (opts && opts.outcome === 'completed' && global.CONFIG.sheets.autoUpload) {
+      try {
+        if (statusLine) statusLine.textContent = 'Saving to Google Sheets…';
+        result.summary.selected_attempt = true;
+        global.Exporter.historyAdd(result.summary);
+        if (global.CONFIG.sheets.webhookUrl) {
+          const r = await global.Exporter.upload(result);
+          result.summary._upload_status = r.status;
+          S.autoUploaded = true;
+        }
+      } catch (e) { /* non-fatal: results still shown; manual submit remains */ }
+    }
     R.go('results', {});
   }
 

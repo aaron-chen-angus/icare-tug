@@ -32,7 +32,7 @@
     previous: null,      // previous attempt (for comparison)
     attemptNo: 1,
     reset() {
-      this.frames = null; this.result = null; this.calibration = null;
+      this.frames = null; this.result = null; this.calibration = null; this.autoUploaded = false;
     },
   };
 

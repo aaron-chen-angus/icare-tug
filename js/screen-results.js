@@ -211,9 +211,14 @@
 
     // ---- actions ----
     const act = el('div', { class: 'panel' });
-    const uploadStatus = el('p', { class: 'opt', id: 'uploadStatus' }, [CFG.sheets.webhookUrl ? '' : 'Cloud upload not configured — results stay on device (download ZIP).']);
+    // If the test auto-uploaded on completion, reflect that; otherwise prompt.
+    let initialStatus = '';
+    if (!CFG.sheets.webhookUrl) initialStatus = 'Cloud upload not configured — results stay on device (download ZIP).';
+    else if (S.autoUploaded) initialStatus = uploadMsg(sm._upload_status) + ' (auto-saved on completion).';
+    const uploadStatus = el('p', { class: 'opt', id: 'uploadStatus' }, [initialStatus]);
     if (!(S.previous && S.previous.summary)) {
-      act.appendChild(el('button', { class: 'btn btn-primary btn-large', onclick: () => submit(sm, res) }, [T('results.submit')]));
+      const label = S.autoUploaded ? 'RE-SEND TO SHEET' : T('results.submit');
+      act.appendChild(el('button', { class: 'btn btn-primary btn-large', onclick: () => submit(sm, res) }, [label]));
     }
     const row = el('div', { class: 'btn-row', style: 'margin-top:10px' });
     row.appendChild(el('button', { class: 'btn', onclick: tryAgain }, [T('results.tryAgain')]));
