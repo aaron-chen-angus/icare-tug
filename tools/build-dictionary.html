@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TUG//LAB — Data Dictionary Builder</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>body{padding:16px} pre{white-space:pre-wrap;background:rgba(5,10,22,.6);border:1px solid var(--line);padding:12px;max-height:60vh;overflow:auto;font-size:12px}</style>
+</head>
+<body>
+  <div id="app" style="max-width:900px">
+    <h1 class="logo">TUG<span class="sep">//</span>LAB — DICTIONARY</h1>
+    <div class="panel">
+      <p>Generates <code>DATA_DICTIONARY.md</code> from <code>js/schema.js</code> + <code>js/config.js</code>.
+      Click Download, then upload the file to the repo root via the GitHub web UI.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="dl">DOWNLOAD DATA_DICTIONARY.md</button>
+        <button class="btn" id="copy">COPY TO CLIPBOARD</button>
+      </div>
+      <p class="err" id="check"></p>
+    </div>
+    <pre id="preview"></pre>
+  </div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/strings.js"></script>
+  <script src="../js/schema.js"></script>
+  <script>
+    (function () {
+      function tbl(name) {
+        const cols = SCHEMA.tables[name];
+        let md = '| # | Column | Type | Unit | Description | Calculation / source |\n|---|---|---|---|---|---|\n';
+        cols.forEach((f, i) => {
+          md += `| ${i + 1} | \`${f.key}\` | ${f.type} | ${f.unit || '—'} | ${esc(f.desc)} | ${esc(f.calc)} |\n`;
+        });
+        return md;
+      }
+      function byGroup(name) {
+        const cols = SCHEMA.tables[name];
+        const groups = {};
+        cols.forEach((f) => { (groups[f.group] = groups[f.group] || []).push(f); });
+        let md = '';
+        Object.keys(groups).forEach((g) => {
+          md += `\n#### ${g}\n\n| Column | Type | Unit | Description | Calculation / source |\n|---|---|---|---|---|\n`;
+          groups[g].forEach((f) => { md += `| \`${f.key}\` | ${f.type} | ${f.unit || '—'} | ${esc(f.desc)} | ${esc(f.calc)} |\n`; });
+        });
+        return md;
+      }
+      function esc(s) { return String(s == null ? '' : s).replace(/\|/g, '\\|'); }
+
+      function markers() {
+        let md = '| Key | MediaPipe index | Name | Role | Used by |\n|---|---|---|---|---|\n';
+        SCHEMA.markers.forEach((m) => { md += `| \`${m.key}\` | ${m.mpIndex} | ${m.name} | ${m.role} | ${m.usedBy} |\n`; });
+        return md;
+      }
+      function parity() {
+        let md = '| Flutter server field | TUG//LAB column |\n|---|---|\n';
+        Object.keys(SCHEMA.parityMap).forEach((k) => { md += `| \`${k}\` | \`${SCHEMA.parityMap[k]}\` |\n`; });
+        return md;
+      }
+      function params() {
+        let md = '| Key path | Default |\n|---|---|\n';
+        flatten(CONFIG, '').forEach(([k, v]) => { md += `| \`${k}\` | ${esc(JSON.stringify(v))} |\n`; });
+        return md;
+      }
+      function flatten(obj, prefix) {
+        let out = [];
+        Object.keys(obj).forEach((k) => {
+          if (k.startsWith('_')) return;
+          const key = prefix ? prefix + '.' + k : k;
+          const v = obj[k];
+          if (v && typeof v === 'object' && !Array.isArray(v)) out = out.concat(flatten(v, key));
+          else out.push([key, v]);
+        });
+        return out;
+      }
+
+      function build() {
+        const d = new Date().toISOString().slice(0, 10);
+        return `# TUG//LAB — Data Dictionary
+
+Auto-generated from \`js/schema.js\` + \`js/config.js\` by \`tools/build-dictionary.html\`.
+Schema version **${SCHEMA.version}** · generated ${d}.
+
+## 1. Conventions
+- Time \`t = 0\` at **GO**; negative \`t\` = pre-roll (seated baseline).
+- Image coordinates are MediaPipe-normalised (0–1). World landmarks are metric,
+  pelvis-origin, y **down**-positive, camera-motion-invariant for body geometry.
+- Path coordinate \`s\` (m): reconstructed travel toward the cone (panning-safe).
+- Vertical quantities positive **up**. Angles in **degrees**.
+- Booleans export \`TRUE\`/\`FALSE\`. \`null\` = empty cell. **No zero-filling.**
+- Trunk / shank inclination positive = leaning forward in the current facing
+  direction. Facing \`f(t)\` ∈ {+1, −1} from toe-ahead-of-heel.
+
+## 2. Sessions table (one row per submitted attempt)
+${byGroup('Sessions')}
+
+## 3. Steps table (one row per heel strike)
+${tbl('Steps')}
+
+## 4. Events table (timeline)
+${tbl('Events')}
+
+## 5. Frames table (analysed 30 Hz series)
+${tbl('Frames')}
+
+## 6. Raw frames (ZIP only)
+\`*_frames_raw.csv\` has 120 columns: \`t_ms\` plus 7 values
+(image x,y,z,visibility + world x,y,z) for each of the 17 tracked markers.
+
+## 7. Tracked pose markers (17)
+${markers()}
+
+## 8. Definitions of derived quantities
+- **Valid sample:** visibility ≥ ${CONFIG.signal.minVisibility} and inside frame.
+- **Resampling / filtering:** uniform ${CONFIG.signal.resampleHz} Hz; zero-lag
+  2nd-order Butterworth, −3 dB at ${CONFIG.signal.cutoffHz} Hz (foot markers
+  ${CONFIG.signal.cutoffFootHz} Hz), reflection padding ${CONFIG.signal.padSamples}.
+- **Hip progress p:** (hip-above-feet − seated) / (standing − seated).
+- **Path coordinate s:** integrated stance-foot relative motion (operator-
+  following camera; see §12 and the steering notes).
+- **Heel strike / toe off (Zeni 2008):** maxima / minima of the signed
+  foot-ahead-of-pelvis signal within each straight segment.
+- **Step vs stride:** step = opposite-foot HS to HS; stride = same-foot HS to HS.
+- **Symmetry:** \`|L−R| / (0.5(L+R)) × 100\`. **CV:** SD/mean×100 (≥4 strides).
+- **Gait velocity:** path distance between first and last HS per segment ÷ time,
+  distance-weighted across out and back. Nominal = 2×course ÷ (walk out + back).
+- **Risk tiers:** CDC cut-point ${CONFIG.protocol.fallRiskCdcS} s (At risk ≥).
+  Tiers low <${CONFIG.risk.tierLowBelowS}, moderate <${CONFIG.risk.tierHighAtS},
+  high ≥${CONFIG.risk.tierHighAtS} (app convention for UI colouring only).
+
+## 9. Quality-control flags
+**Blocking** (withhold \`valid_for_norm\`; time still shown with a warning):
+\`LOW_FPS\`, \`LOW_VALID_FRAMES\`, \`TRACKING_GAPS\`, \`NOT_SEATED_AT_START\`,
+\`MOVED_BEFORE_GO\`, \`MANUAL_STOP\`, \`EVENT_MISSING:*\`, \`COURSE_NOT_COMPLETED\`,
+\`CAMERA_MOVED\`, \`FACING_PATTERN_UNEXPECTED\`, \`HIP_RISE_IMPLAUSIBLE\`,
+\`PARTICIPANT_LEFT_FRAME\`.
+**Non-blocking (warnings):** \`OBLIQUE_VIEW\`, \`SCALE_INCONSISTENT\`,
+\`NO_COURSE_CALIB\`, \`CAMERA_TILT\`, \`FEW_STRIDES\`, \`GAIT_EVENT_NONALTERNATING\`,
+\`LR_SWAP_CORRECTED\`, \`DEPTH_DRIFT\`, \`LOW_LIGHT\`, \`CAMERA_PAN_FAST\`,
+\`SECOND_PERSON_SUSPECTED\`.
+
+## 10. Algorithm parameters (from config.js)
+${params()}
+
+## 11. Parity map (Flutter server field ↔ TUG//LAB column)
+${parity()}
+
+## 12. Limitations
+Single camera, 2-D sagittal estimates from pose; the operator-following camera
+reconstructs travel from stance-foot motion rather than a fixed reference, so
+distance-derived metrics are most reliable when the walk stays parallel to the
+camera (watch \`DEPTH_DRIFT\`). The server ML fall-probability is not reproduced
+(\`fall_probability\` is always empty). Not a medical device.
+
+## 13. References
+See README §13 (CDC STEADI, Podsiadlo & Richardson 1991, Barry 2014, Bohannon
+2006, Zeni 2008, Winter 2009, BlazePose).
+`;
+      }
+
+      function consistencyCheck() {
+        const bad = [];
+        Object.keys(SCHEMA.tables).forEach((t) => SCHEMA.tables[t].forEach((f) => {
+          if (!f.desc || f.unit == null || !f.calc) bad.push(t + '.' + f.key);
+        }));
+        return bad;
+      }
+
+      const md = build();
+      document.getElementById('preview').textContent = md;
+      const bad = consistencyCheck();
+      const chk = document.getElementById('check');
+      if (bad.length) { chk.textContent = 'FAIL: fields missing desc/unit/calc: ' + bad.join(', '); chk.style.color = 'var(--red)'; }
+      else { chk.textContent = 'Consistency check passed: every schema field has a description, unit and calculation note.'; chk.style.color = 'var(--green)'; }
+
+      document.getElementById('dl').onclick = function () {
+        const blob = new Blob([md], { type: 'text/markdown' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'DATA_DICTIONARY.md';
+        document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      };
+      document.getElementById('copy').onclick = function () { navigator.clipboard && navigator.clipboard.writeText(md); };
+
+      window.__DICT_MD = md;
+      window.__DICT_BAD = bad;
+      document.title = 'DICT ' + (bad.length ? 'FAIL' : 'OK');
+    })();
+  </script>
+</body>
+</html>
