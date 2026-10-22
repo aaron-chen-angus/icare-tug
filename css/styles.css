@@ -287,6 +287,16 @@ input:focus, select:focus, textarea:focus {
 /* ---- live session / camera -------------------------------------------- */
 .live-session { position: fixed; inset: 0; z-index: 20; background: #000; display: none; }
 .live-session.active { display: block; }
+/* During S2 setup the camera previews BEHIND the interactive setup content so
+   the permission button and pre-flight checklist remain tappable. */
+.live-session.behind { z-index: 0; background: transparent; }
+.live-session.behind .hud,
+.live-session.behind .overlay-status,
+.live-session.behind .progress,
+.live-session.behind .controls { display: none; }
+/* Keep #app scrollable and on top during setup; give panels a readable scrim. */
+body.setup-active #app { position: relative; z-index: 2; min-height: 100dvh; }
+body.setup-active .panel { background: rgba(5, 10, 22, .82); }
 .live-video-wrap {
   position: absolute; inset: 0;
   display: grid; place-items: center;

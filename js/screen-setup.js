@@ -114,13 +114,16 @@
     pf.appendChild(el('p', { class: 'opt', id: 'pfHint' }, [T('setup.markHeight')]));
     wrap.appendChild(pf);
 
-    // controls shown in the fixed live layer when camera is active
-    const controls = R.$('#liveControls');
-    controls.innerHTML = '';
-    const startBtn = el('button', { class: 'btn btn-primary', id: 'startTestBtn', disabled: 'true', onclick: onStartTest }, [T('setup.start')]);
+    // START / CANCEL live INSIDE the setup content (over the camera preview) so
+    // they stay tappable. The fixed live-layer controls are only used in S3.
+    const controls = el('div', { class: 'btn-row', style: 'margin-top:12px' });
     const cancelBtn = el('button', { class: 'btn btn-danger', onclick: onCancel }, ['CANCEL']);
+    const startBtn = el('button', { class: 'btn btn-primary', id: 'startTestBtn', disabled: 'true', onclick: onStartTest }, [T('setup.start')]);
     controls.appendChild(cancelBtn);
     controls.appendChild(startBtn);
+    wrap.appendChild(controls);
+    // clear any stale live-layer controls from a previous screen
+    const liveCtrls = R.$('#liveControls'); if (liveCtrls) liveCtrls.innerHTML = '';
 
     // reset per-screen state
     liveState = {
