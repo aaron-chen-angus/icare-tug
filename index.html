@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05070d">
+  <title>TUG//LAB — TRON Timed Up and Go Biomechanics Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=1.0.0">
+</head>
+<body class="lock-portrait">
+  <div class="tron-bg" aria-hidden="true"></div>
+  <div class="rotate-overlay" aria-hidden="true">ROTATE TO PORTRAIT ↺</div>
+
+  <!-- Fixed full-screen live camera layer (shown during S2/S3) -->
+  <div class="live-session" id="liveSession" aria-hidden="true">
+    <div class="live-video-wrap" id="videoWrap">
+      <video id="camVideo" playsinline muted aria-label="Live camera preview"></video>
+      <canvas id="overlay" aria-label="Pose skeleton overlay" role="img"></canvas>
+    </div>
+    <div class="hud" id="liveHud"></div>
+    <div class="overlay-status" id="overlayStatus"></div>
+    <div class="progress" id="liveProgress"><i></i></div>
+    <div class="controls" id="liveControls"></div>
+  </div>
+
+  <!-- Main scrollable app -->
+  <div id="app">
+    <div id="screen-root"><!-- screens injected by app.js --></div>
+    <p class="version-footer" id="versionFooter"></p>
+  </div>
+
+  <!-- Script order per brief §4 (+ util and screen modules) -->
+  <script src="js/config.js?v=1.0.0"></script>
+  <script src="js/strings.js?v=1.0.0"></script>
+  <script src="js/schema.js?v=1.0.0"></script>
+  <script src="js/util.js?v=1.0.0"></script>
+  <script src="js/dsp.js?v=1.0.0"></script>
+  <script src="js/analysis.js?v=1.0.0"></script>
+  <script src="js/live.js?v=1.0.0"></script>
+  <script src="js/export.js?v=1.0.0"></script>
+  <script src="js/charts.js?v=1.0.0"></script>
+  <!-- pose-engine is an ES module (imports MediaPipe) -->
+  <script type="module" src="js/pose-engine.js?v=1.0.0"></script>
+  <!-- router first, then screen modules register themselves -->
+  <script src="js/app.js?v=1.0.0"></script>
+  <script src="js/screen-entry.js?v=1.0.0"></script>
+  <script src="js/screen-setup.js?v=1.0.0"></script>
+  <script src="js/screen-live.js?v=1.0.0"></script>
+  <script src="js/screen-results.js?v=1.0.0"></script>
+  <script src="js/screen-history.js?v=1.0.0"></script>
+</body>
+</html>
